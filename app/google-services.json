@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "463941303077",
+    "firebase_url": "https://trackingapp-73a8d.firebaseio.com",
+    "project_id": "trackingapp-73a8d",
+    "storage_bucket": "trackingapp-73a8d.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:463941303077:android:6250a7266d603ece",
+        "android_client_info": {
+          "package_name": "com.example.juarez.trackingapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "463941303077-g4neunvkq70puue8rsiqsmbilpkhn148.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.juarez.trackingapp",
+            "certificate_hash": "15af194b1ebf9b1773d4a5a5a02c4cae2305f7ab"
+          }
+        },
+        {
+          "client_id": "463941303077-rsgith041pq6nh85ap28hr6jgb91aeuf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCMrTE3b0r4j5WV6p2nNVca9kpeJGWyBt0"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 2,
+          "other_platform_oauth_client": [
+            {
+              "client_id": "463941303077-rsgith041pq6nh85ap28hr6jgb91aeuf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
