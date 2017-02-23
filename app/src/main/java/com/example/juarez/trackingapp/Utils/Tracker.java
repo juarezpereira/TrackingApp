@@ -38,7 +38,6 @@ public class Tracker extends Service{
     public Tracker(Context mContext, @NonNull LocationListener locationListener) {
         this.mContext = mContext;
         this.mLocationListener = locationListener;
-        getLocation();
     }
 
     public Location getLocation() {
@@ -92,7 +91,7 @@ public class Tracker extends Service{
             }
 
         } catch (SecurityException exception) {
-
+            Log.e(Tracker.class.getSimpleName(), exception.getMessage());
         }
 
         return mLocation;
@@ -139,6 +138,10 @@ public class Tracker extends Service{
                         dialog.dismiss();
                     }
                 }).show();
+    }
+
+    public void startLocation(){
+        getLocation();
     }
 
     public void stopUsingGPS(){
