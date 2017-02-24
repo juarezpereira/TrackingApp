@@ -5,12 +5,12 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentSender;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.location.Location;
 import android.os.Build;
 import android.Manifest;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -18,9 +18,16 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 
-import com.example.juarez.trackingapp.Model.Position;
+import com.directions.route.Route;
+import com.directions.route.RouteException;
+import com.directions.route.Routing;
+import com.directions.route.RoutingListener;
 import com.example.juarez.trackingapp.Model.User;
 import com.example.juarez.trackingapp.Utils.Constants;
+import com.example.juarez.trackingapp.Utils.PlayServiceUtil;
+import com.firebase.geofire.GeoFire;
+import com.firebase.geofire.GeoLocation;
+import com.firebase.geofire.LocationCallback;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.PendingResult;
@@ -32,11 +39,18 @@ import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationSettingsRequest;
 import com.google.android.gms.location.LocationSettingsResult;
 import com.google.android.gms.location.LocationSettingsStatusCodes;
+import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.Circle;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.FirebaseAuth;
@@ -47,6 +61,9 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class MapActivity extends AppCompatActivity implements OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
@@ -62,9 +79,16 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
 
     private FirebaseUser mUser;
     private FirebaseAuth mAuth;
-    private DatabaseReference mRefTracking;
     private DatabaseReference mRefUser;
-    private DatabaseReference mRefUserTracking;
+
+    private GeoFire mGeoFire;
+
+    private LatLng latLngCenter;
+
+    private Circle mSearchCircle;
+    private List<Polyline> polylines;
+
+    private Marker marker;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,39 +98,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-        mAuth = FirebaseAuth.getInstance();
-        mUser = mAuth.getCurrentUser();
-
-        mRefTracking = FirebaseDatabase.getInstance().getReference(Constants.TRACKING);
-        mRefUser = FirebaseDatabase.getInstance().getReference(Constants.USERS).child(mUser.getUid());
-        mRefUserTracking = mRefUser.child(Constants.TRACKING);
-
-        mRefUserTracking.addChildEventListener(new ChildEventListener() {
-            @Override
-            public void onChildAdded(DataSnapshot dataSnapshot, String s) {
-                onAddedListenerTracking(dataSnapshot.getKey());
-            }
-
-            @Override
-            public void onChildChanged(DataSnapshot dataSnapshot, String s) {
-                onAddedListenerTracking(dataSnapshot.getKey());
-            }
-
-            @Override
-            public void onChildRemoved(DataSnapshot dataSnapshot) {
-
-            }
-
-            @Override
-            public void onChildMoved(DataSnapshot dataSnapshot, String s) {
-
-            }
-
-            @Override
-            public void onCancelled(DatabaseError databaseError) {
-
-            }
-        });
+        PlayServiceUtil.checkGooglePlayService(this);
 
         if (mGoogleApiCliente == null) {
             this.mGoogleApiCliente = new GoogleApiClient.Builder(this)
@@ -117,6 +109,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         }
 
         onCreateLocationListener();
+        onSetupGeoFirebase();
     }
 
     @Override
@@ -128,7 +121,6 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.menu_logout) {
-
             mRefUser.addListenerForSingleValueEvent(new ValueEventListener() {
                 @Override
                 public void onDataChange(DataSnapshot dataSnapshot) {
@@ -138,9 +130,8 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
                     mRefUser.setValue(user).addOnCompleteListener(new OnCompleteListener<Void>() {
                         @Override
                         public void onComplete(@NonNull Task<Void> task) {
-                            if(task.isSuccessful()){
+                            if (task.isSuccessful()) {
                                 mAuth.signOut();
-
                                 finish();
                             }
                         }
@@ -152,7 +143,6 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
 
                 }
             });
-
         }
         return super.onOptionsItemSelected(item);
     }
@@ -187,18 +177,18 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     public void onMapReady(GoogleMap googleMap) {
         this.mGoogleMap = googleMap;
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                mGoogleMap.setMyLocationEnabled(true);
+            } else {
+                if (shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)) {
+                    showAlertDialog();
+                }
+                requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_LOCATION);
+            }
+        } else {
+            mGoogleMap.setMyLocationEnabled(true);
         }
-
-        mGoogleMap.setMyLocationEnabled(true);
     }
 
     @Override
@@ -216,7 +206,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
 
     }
 
-    public void onCreateLocationListener(){
+    public void onCreateLocationListener() {
         this.mLocationRequest = LocationRequest.create();
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         mLocationRequest.setInterval(5000);
@@ -257,39 +247,60 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_CHECK_SETTINGS) {
-            if (resultCode == Activity.RESULT_OK ) {
+            if (resultCode == Activity.RESULT_OK) {
                 startLocationUpdate();
             }
         }
     }
 
     protected void startLocationUpdate() {
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
-            if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED){
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                 LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiCliente, mLocationRequest, this);
-            }else{
-                if (shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)){
+            } else {
+                if (shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)) {
                     showAlertDialog();
                 }
                 requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_LOCATION);
             }
-        }else{
+        } else {
             LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiCliente, mLocationRequest, this);
         }
     }
 
     @Override
-    public void onLocationChanged(Location location) {
-        if (location == null)
+    public void onLocationChanged(Location l) {
+        if (l == null)
             return;
 
-        Position position = new Position(location.getLatitude(),location.getLongitude());
-        mRefTracking
-                .child(mUser.getUid())
-                .setValue(position);
+        latLngCenter = new LatLng(l.getLatitude(), l.getLongitude());
+
+        if (mSearchCircle != null) {
+            mSearchCircle.setCenter(latLngCenter);
+        } else {
+            mSearchCircle = mGoogleMap.addCircle(new CircleOptions()
+                    .center(latLngCenter)
+                    .fillColor(Color.parseColor("#401976D2"))
+                    .strokeColor(Color.parseColor("#4D2196F3"))
+                    .radius(1000));
+        }
+
+        mGoogleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLngCenter, 14));
+
+        mGeoFire.setLocation(mUser.getUid(), new GeoLocation(l.getLatitude(), l.getLongitude()),
+                new GeoFire.CompletionListener() {
+                    @Override
+                    public void onComplete(String key, DatabaseError error) {
+                        if (error != null) {
+                            Log.e(MapActivity.class.getSimpleName(), "Location failure saved server");
+                        } else {
+                            Log.e(MapActivity.class.getSimpleName(), "Location saved server");
+                        }
+                    }
+                });
     }
 
-    protected void showAlertDialog(){
+    protected void showAlertDialog() {
         this.mAlertDialog = new AlertDialog.Builder(this)
                 .setTitle("Permissões")
                 .setMessage("Permissão de localização necessaria para aplicação. Ativar?")
@@ -308,39 +319,128 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         mAlertDialog.show();
     }
 
-    public void onAddedListenerTracking(String key){
+    public void onSetupGeoFirebase() {
+        mAuth = FirebaseAuth.getInstance();
+        mUser = mAuth.getCurrentUser();
 
-        mRefTracking.child(key)
-                .addValueEventListener(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(DataSnapshot dataSnapshot) {
-                        Position position = dataSnapshot.getValue(Position.class);
+        DatabaseReference mRefRoot = FirebaseDatabase.getInstance().getReference();
+        mRefUser = mRefRoot.child(Constants.USERS).child(mUser.getUid());
+        mGeoFire = new GeoFire(mRefRoot.child(Constants.GEO_FIRE));
 
-                        if(position == null ||
-                                position.getLatitude() == null || position.getLongitude() == null){
-                            return;
-                        }
+        DatabaseReference mRefUserTracking = mRefUser.child(Constants.TRACKING);
+        mRefUserTracking.addChildEventListener(new ChildEventListener() {
+            @Override
+            public void onChildAdded(DataSnapshot dataSnapshot, String s) {
+                onGeoFireListener(dataSnapshot.getKey());
+            }
 
-                        updateMarkerMap(position);
-                    }
+            @Override
+            public void onChildChanged(DataSnapshot dataSnapshot, String s) {
+                onGeoFireListener(dataSnapshot.getKey());
+            }
 
-                    @Override
-                    public void onCancelled(DatabaseError databaseError) {
+            @Override
+            public void onChildRemoved(DataSnapshot dataSnapshot) {
 
-                    }
-                });
+            }
+
+            @Override
+            public void onChildMoved(DataSnapshot dataSnapshot, String s) {
+
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+            }
+        });
     }
 
-    public void updateMarkerMap(Position position){
-        if(mGoogleMap == null)
+    public void onGeoFireListener(String child) {
+        if (mGeoFire == null)
             return;
 
-        MarkerOptions markerOptions = new MarkerOptions()
-                .draggable(false)
-                .position(new LatLng(position.getLatitude(),position.getLongitude()));
+        mGeoFire.getLocation(child, new LocationCallback() {
+            @Override
+            public void onLocationResult(String key, GeoLocation location) {
+                if (location == null)
+                    return;
 
-        mGoogleMap.clear();
-        mGoogleMap.addMarker(markerOptions);
+                startRoute(latLngCenter, new LatLng(location.latitude, location.longitude));
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+
+            }
+        });
+    }
+
+    public void startRoute(LatLng start, final LatLng end) {
+        Routing mRouting = new Routing.Builder()
+                .travelMode(Routing.TravelMode.DRIVING)
+                .waypoints(start, end)
+                .alternativeRoutes(false)
+                .withListener(new RoutingListener() {
+                    @Override
+                    public void onRoutingFailure(RouteException e) {
+
+                    }
+
+                    @Override
+                    public void onRoutingStart() {
+
+                    }
+
+                    @Override
+                    public void onRoutingSuccess(ArrayList<Route> arrayList, int shortestRouteIndex) {
+
+                        /*
+                        *   REMOVE POLYNINES ANTERIORES DO MAPA
+                        * */
+                        if (polylines != null && polylines.size() > 0) {
+                            for (Polyline poly : polylines) {
+                                poly.remove();
+                            }
+                        }
+
+                        polylines = new ArrayList<>();
+
+                        for (int i = 0; i < arrayList.size(); i++) {
+                            PolylineOptions polylineOptions = new PolylineOptions()
+                                    .color(getResources().getColor(R.color.colorAccent))
+                                    .width(20)
+                                    .addAll(arrayList.get(i).getPoints());
+
+                            /*
+                            *   ADICIONA O POLYNINES NO MAPA E SALVA UMA INSTANCIA PARA PODER REMOVER
+                            * */
+                            Polyline polyline = mGoogleMap.addPolyline(polylineOptions);
+                            polylines.add(polyline);
+                        }
+
+                        /*
+                        *   REMOVE O PONTO DE DESTINO ANTERIOR
+                        * */
+                        if (marker != null)
+                            marker.remove();
+
+                        /*
+                        *   ADICIONA O PONTO DE DESTINO NO MAPA
+                        * */
+                        MarkerOptions options = new MarkerOptions();
+                        options.position(end);
+                        options.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE));
+
+                        marker = mGoogleMap.addMarker(options);
+                    }
+
+                    @Override
+                    public void onRoutingCancelled() {
+
+                    }
+                }).build();
+        mRouting.execute();
     }
 
 }
