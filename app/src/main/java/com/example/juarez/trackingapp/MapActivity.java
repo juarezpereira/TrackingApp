@@ -47,6 +47,7 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
@@ -63,7 +64,6 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
-import java.util.List;
 
 public class MapActivity extends AppCompatActivity implements OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, LocationListener {
@@ -83,12 +83,12 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
 
     private GeoFire mGeoFire;
 
-    private LatLng latLngCenter;
+    private LatLng latLngOrigin;
+    private LatLng latLngDestination;
 
+    private Polyline mPolyline;
     private Circle mSearchCircle;
-    private List<Polyline> polylines;
-
-    private Marker marker;
+    private Marker mMarkerDestination;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -273,19 +273,16 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
         if (l == null)
             return;
 
-        latLngCenter = new LatLng(l.getLatitude(), l.getLongitude());
+        latLngOrigin = new LatLng(l.getLatitude(), l.getLongitude());
 
         if (mSearchCircle != null) {
-            mSearchCircle.setCenter(latLngCenter);
+            mSearchCircle.setCenter(latLngOrigin);
         } else {
             mSearchCircle = mGoogleMap.addCircle(new CircleOptions()
-                    .center(latLngCenter)
-                    .fillColor(Color.parseColor("#401976D2"))
+                    .center(latLngOrigin)
                     .strokeColor(Color.parseColor("#4D2196F3"))
                     .radius(1000));
         }
-
-        mGoogleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLngCenter, 14));
 
         mGeoFire.setLocation(mUser.getUid(), new GeoLocation(l.getLatitude(), l.getLongitude()),
                 new GeoFire.CompletionListener() {
@@ -298,6 +295,8 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
                         }
                     }
                 });
+
+        startRoute(latLngOrigin, latLngDestination);
     }
 
     protected void showAlertDialog() {
@@ -366,7 +365,8 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
                 if (location == null)
                     return;
 
-                startRoute(latLngCenter, new LatLng(location.latitude, location.longitude));
+                latLngDestination = new LatLng(location.latitude, location.longitude);
+                startRoute(latLngOrigin, latLngDestination);
             }
 
             @Override
@@ -377,6 +377,8 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     }
 
     public void startRoute(LatLng start, final LatLng end) {
+        if (start == null || end == null) return;
+
         Routing mRouting = new Routing.Builder()
                 .travelMode(Routing.TravelMode.DRIVING)
                 .waypoints(start, end)
@@ -394,45 +396,29 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
 
                     @Override
                     public void onRoutingSuccess(ArrayList<Route> arrayList, int shortestRouteIndex) {
+                        if (mPolyline != null) mPolyline.remove();
 
-                        /*
-                        *   REMOVE POLYNINES ANTERIORES DO MAPA
-                        * */
-                        if (polylines != null && polylines.size() > 0) {
-                            for (Polyline poly : polylines) {
-                                poly.remove();
-                            }
-                        }
+                        PolylineOptions polylineOptions = new PolylineOptions();
+                        polylineOptions.color(Color.BLUE);
+                        polylineOptions.width(12);
+                        polylineOptions.addAll(arrayList.get(shortestRouteIndex).getPoints());
 
-                        polylines = new ArrayList<>();
+                        mPolyline = mGoogleMap.addPolyline(polylineOptions);
 
-                        for (int i = 0; i < arrayList.size(); i++) {
-                            PolylineOptions polylineOptions = new PolylineOptions()
-                                    .color(getResources().getColor(R.color.colorAccent))
-                                    .width(20)
-                                    .addAll(arrayList.get(i).getPoints());
+                        if (mMarkerDestination != null) mMarkerDestination.remove();
 
-                            /*
-                            *   ADICIONA O POLYNINES NO MAPA E SALVA UMA INSTANCIA PARA PODER REMOVER
-                            * */
-                            Polyline polyline = mGoogleMap.addPolyline(polylineOptions);
-                            polylines.add(polyline);
-                        }
-
-                        /*
-                        *   REMOVE O PONTO DE DESTINO ANTERIOR
-                        * */
-                        if (marker != null)
-                            marker.remove();
-
-                        /*
-                        *   ADICIONA O PONTO DE DESTINO NO MAPA
-                        * */
                         MarkerOptions options = new MarkerOptions();
                         options.position(end);
                         options.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE));
 
-                        marker = mGoogleMap.addMarker(options);
+                        mMarkerDestination = mGoogleMap.addMarker(options);
+
+                        LatLngBounds bounds = new LatLngBounds.Builder()
+                                .include(latLngOrigin)
+                                .include(latLngDestination)
+                                .build();
+
+                        mGoogleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds,100));
                     }
 
                     @Override
