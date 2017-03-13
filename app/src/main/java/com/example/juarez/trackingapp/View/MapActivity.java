@@ -1,4 +1,4 @@
-package com.example.juarez.trackingapp;
+package com.example.juarez.trackingapp.View;
 
 import android.app.Activity;
 import android.content.DialogInterface;
@@ -22,7 +22,9 @@ import com.directions.route.Route;
 import com.directions.route.RouteException;
 import com.directions.route.Routing;
 import com.directions.route.RoutingListener;
-import com.example.juarez.trackingapp.Model.User;
+import com.example.juarez.trackingapp.MainActivity;
+import com.example.juarez.trackingapp.R;
+import com.example.juarez.trackingapp.TrackerApplication;
 import com.example.juarez.trackingapp.Utils.Constants;
 import com.example.juarez.trackingapp.Utils.PlayServiceUtil;
 import com.firebase.geofire.GeoFire;
@@ -78,8 +80,9 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     private AlertDialog mAlertDialog;
 
     private FirebaseUser mUser;
-    private FirebaseAuth mAuth;
-    private DatabaseReference mRefUser;
+
+    private DatabaseReference referenceUsers;
+    private DatabaseReference referenceRoot;
 
     private GeoFire mGeoFire;
 
@@ -89,6 +92,8 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     private Polyline mPolyline;
     private Circle mSearchCircle;
     private Marker mMarkerDestination;
+
+    private TrackerApplication application;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -108,6 +113,8 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
                     .build();
         }
 
+        application = (TrackerApplication) getApplication();
+
         onCreateLocationListener();
         onSetupGeoFirebase();
     }
@@ -121,35 +128,34 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.menu_logout) {
-            mRefUser.addListenerForSingleValueEvent(new ValueEventListener() {
-                @Override
-                public void onDataChange(DataSnapshot dataSnapshot) {
-                    User user = dataSnapshot.getValue(User.class);
-                    user.setOnline(false);
-
-                    mRefUser.setValue(user).addOnCompleteListener(new OnCompleteListener<Void>() {
-                        @Override
-                        public void onComplete(@NonNull Task<Void> task) {
-                            if (task.isSuccessful()) {
-                                mAuth.signOut();
-                                finish();
-                            }
-                        }
-                    });
-                }
-
-                @Override
-                public void onCancelled(DatabaseError databaseError) {
-
-                }
-            });
+//            mRefUser.addListenerForSingleValueEvent(new ValueEventListener() {
+//                @Override
+//                public void onDataChange(DataSnapshot dataSnapshot) {
+//                    User user = dataSnapshot.getValue(User.class);
+//                    user.setOnline(false);
+//
+//                    mRefUser.setValue(user).addOnCompleteListener(new OnCompleteListener<Void>() {
+//                        @Override
+//                        public void onComplete(@NonNull Task<Void> task) {
+//                            if (task.isSuccessful()) {
+//                                mAuth.signOut();
+//                                finish();
+//                            }
+//                        }
+//                    });
+//                }
+//
+//                @Override
+//                public void onCancelled(DatabaseError databaseError) {
+//
+//                }
+//            });
         }
         return super.onOptionsItemSelected(item);
     }
 
     @Override
     public void onBackPressed() {
-        setResult(Constants.CLOSE_APP);
         super.onBackPressed();
     }
 
@@ -319,14 +325,14 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
     }
 
     public void onSetupGeoFirebase() {
-        mAuth = FirebaseAuth.getInstance();
-        mUser = mAuth.getCurrentUser();
+        mUser = application.getFirebaseUser();
 
-        DatabaseReference mRefRoot = FirebaseDatabase.getInstance().getReference();
-        mRefUser = mRefRoot.child(Constants.USERS).child(mUser.getUid());
-        mGeoFire = new GeoFire(mRefRoot.child(Constants.GEO_FIRE));
+        referenceRoot = FirebaseDatabase.getInstance().getReference();
+        referenceUsers = referenceRoot.child(Constants.USERS).child(mUser.getUid());
 
-        DatabaseReference mRefUserTracking = mRefUser.child(Constants.TRACKING);
+        mGeoFire = new GeoFire(referenceRoot.child(Constants.GEO_FIRE));
+
+        DatabaseReference mRefUserTracking = referenceUsers.child(Constants.TRACKING);
         mRefUserTracking.addChildEventListener(new ChildEventListener() {
             @Override
             public void onChildAdded(DataSnapshot dataSnapshot, String s) {
@@ -418,7 +424,7 @@ public class MapActivity extends AppCompatActivity implements OnMapReadyCallback
                                 .include(latLngDestination)
                                 .build();
 
-                        mGoogleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds,100));
+                        mGoogleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100));
                     }
 
                     @Override

@@ -1,11 +1,12 @@
-<LinearLayout
+<RelativeLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:padding="16dp"
-    tools:context="com.example.juarez.trackingapp.LoginFragment">
+    android:background="@color/colorPrimary"
+    tools:context="com.example.juarez.trackingapp.View.Fragment.LoginFragment">
 
     <EditText
         android:layout_width="match_parent"
@@ -13,6 +14,9 @@
         android:inputType="textEmailAddress"
         android:hint="Email"
         android:ems="10"
+        android:padding="8dp"
+        android:background="@drawable/input_background"
+        android:layout_above="@+id/edtPass"
         android:id="@+id/edtEmail"/>
 
     <EditText
@@ -21,12 +25,19 @@
         android:inputType="textPassword"
         android:hint="Password"
         android:ems="10"
+        android:layout_marginTop="8dp"
+        android:padding="8dp"
+        android:background="@drawable/input_background"
+        android:layout_centerVertical="true"
         android:id="@+id/edtPass"/>
 
     <Button
         android:text="Login"
+        android:layout_below="@id/edtPass"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/btn_background"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:id="@+id/btnStart"/>
 
-</LinearLayout>
+</RelativeLayout>

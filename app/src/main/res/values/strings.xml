@@ -1,6 +1,21 @@
 <resources>
     <string name="app_name">TrackingAPP</string>
 
-    <!-- TODO: Remove or change this placeholder text -->
-    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <!-- WELCOME ACTIVITY -->
+    <string name="button_label_next">NEXT</string>
+    <string name="button_label_skip">SKIP</string>
+    <string name="button_label_start">GOT IT</string>
+
+    <!-- INTRO SLIDE 1 -->
+    <string name="slide_1_title">Bem vindo!</string>
+    <string name="slide_1_desc">App feito com firebase com atualizações em real-time!</string>
+
+    <!-- INTRO SLIDE 2 -->
+    <string name="slide_2_title">Lista de Usuarios</string>
+    <string name="slide_2_desc">Veja a lista de usuarios registrados e perceba os que estão conectados no momento.</string>
+
+    <!-- INTRO SLIDE 3 -->
+    <string name="slide_3_title">Monitoramento</string>
+    <string name="slide_3_desc">Escolha um usuario na lista e veja aonde ele se encontra no mapa, e vá até ele.</string>
+    
 </resources>
